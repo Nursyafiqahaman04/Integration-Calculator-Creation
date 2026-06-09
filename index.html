@@ -1,1 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Integration Calculator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <style>
+        :root {
+            --primary: #d63384;
+            --primary-hover: #b8226b;
+            --primary-light: rgba(214, 51, 132, 0.15);
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #212529;
+            --border: #dee2e6;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 950px;
+            display: grid;
+            grid-template-columns: 1fr;
+            overflow: hidden;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 350px 1fr;
+            }
+        }
+
+        /* Sidebar Control Panel */
+        .controls {
+            padding: 25px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: #fafafa;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            color: var(--text);
+            margin-bottom: 5px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+
+        input[type="text"] {
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .slider-box {
+            background: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        /* Result Display Box */
+        .result-box {
+            margin-top: auto;
+            background: var(--primary-light);
+            border-left: 4px solid var(--primary);
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .result-math {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--primary-hover);
+            margin-top: 5px;
+        }
+
+        .error-msg {
+            color: #dc3545;
+            font-size: 0.85rem;
+            margin-top: 4px;
+            display: none;
+        }
+
+        /* Visualization Graph Area */
+        .graph-panel {
+            position: relative;
+            background: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="controls">
+        <div>
+            <h2>Definite Integral</h2>
+            <p style="font-size:0.8rem; color:#6c757d;">Calculates signed area under $f(x)$</p>
+        </div>
+        
+        <div class="input-group">
+            <label for="eqInput">Function $f(x)$</label>
+            <input type="text" id="eqInput" value="x^2 - 1" placeholder="e.g., sin(x), x^2, 2*x">
+            <div id="error" class="error-msg">Invalid expression</div>
+        </div>
+
+        <div class="slider-box">
+            <div class="slider-header">
+                <label>Lower bound ($a$)</label>
+                <span id="valA" style="font-weight:bold;">0</span>
+            </div>
+            <input type="range" id="sliderA" min="-10" max="10" step="0.1" value="0">
+        </div>
+
+        <div class="slider-box">
+            <div class="slider-header">
+                <label>Upper bound ($b$)</label>
+                <span id="valB" style="font-weight:bold;">2</span>
+            </div>
+            <input type="range" id="sliderB" min="-10" max="10" step="0.1" value="2">
+        </div>
+
+        <div class="result-box">
+            <label style="color: #666; font-size: 0.8rem; text-transform: uppercase;">Calculated Value</label>
+            <div class="result-math" id="resultDisplay">∫ f(x) dx = 0.6667</div>
+        </div>
+    </div>
+
+    <div class="graph-panel">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+    const eqInput = document.getElementById('eqInput');
+    const sliderA = document.getElementById('sliderA');
+    const sliderB = document.getElementById('sliderB');
+    const valA = document.getElementById('valA');
+    const valB = document.getElementById('valB');
+    const resultDisplay = document.getElementById('resultDisplay');
+    const errorMsg = document.getElementById('error');
+
+    // Graph viewport coordinates setup
+    const xMin = -5, xMax = 5;
+    const yMin = -5, yMax = 5;
+
+    function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = Math.max(rect.height, 450) * window.devicePixelRatio;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        draw();
+    }
+
+    // Mathematical to Canvas coordinate scaling conversions
+    function toCanvasX(x) {
+        return ((x - xMin) / (xMax - xMin)) * canvas.width;
+    }
+    function toCanvasY(y) {
+        return canvas.height - ((y - yMin) / (yMax - yMin)) * canvas.height;
+    }
+
+    // Adaptive Evaluation Helper
+    function evaluateMath(expr, xVal) {
+        let compiled = math.compile(expr);
+        return compiled.evaluate({ x: xVal });
+    }
+
+    // Numerical integration via Simpson's Rule
+    function integrate(expr, a, b) {
+        const n = 200; // Even step segments
+        const h = (b - a) / n;
+        let sum = evaluateMath(expr, a) + evaluateMath(expr, b);
+
+        for (let i = 1; i < n; i++) {
+            let x = a + i * h;
+            sum += evaluateMath(expr, x) * (i % 2 === 0 ? 2 : 4);
+        }
+        return (h / 3) * sum;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        
+        const w = canvas.width / window.devicePixelRatio;
+        const h = canvas.height / window.devicePixelRatio;
+        
+        // Dynamic re-mapping function local scoped to layout size
+        const cx = (x) => ((x - xMin) / (xMax - xMin)) * w;
+        const cy = (y) => h - ((y - yMin) / (yMax - yMin)) * h;
+
+        // 1. Draw Cartesian Grid Lines
+        ctx.strokeStyle = '#e9ecef';
+        ctx.lineWidth = 1;
+        for (let i = xMin; i <= xMax; i++) {
+            ctx.beginPath(); ctx.moveTo(cx(i), 0); ctx.lineTo(cx(i), h); ctx.stroke();
+        }
+        for (let j = yMin; j <= yMax; j++) {
+            ctx.beginPath(); ctx.moveTo(0, cy(j)); ctx.lineTo(w, cy(j)); ctx.stroke();
+        }
+
+        // 2. Draw Main Axes
+        ctx.strokeStyle = '#adb5bd';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx(0), 0); ctx.lineTo(cx(0), h); ctx.stroke(); // Y axis
+        ctx.beginPath(); ctx.moveTo(0, cy(0)); ctx.lineTo(w, cy(0)); ctx.stroke(); // X axis
+
+        // Parse current text expression string safely 
+        let exprString = eqInput.value;
+        let a = parseFloat(sliderA.value);
+        let b = parseFloat(sliderB.value);
+
+        // Keep intervals structurally ordered lower to higher mathematically 
+        let lower = Math.min(a, b);
+        let upper = Math.max(a, b);
+
+        try {
+            errorMsg.style.display = 'none';
+
+            // 3. Area Shading under the curve f(x)
+            ctx.fillStyle = 'rgba(214, 51, 132, 0.25)'; // Styled transparent tint
+            ctx.beginPath();
+            ctx.moveTo(cx(lower), cy(0));
+
+            const res = 0.05;
+            for (let x = lower; x <= upper; x += res) {
+                let y = evaluateMath(exprString, x);
+                ctx.lineTo(cx(x), cy(y));
+            }
+            ctx.lineTo(cx(upper), cy(0));
+            ctx.closePath();
+            ctx.fill();
+
+            // 4. Draw the actual continuous curve line
+            ctx.strokeStyle = '#d63384';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            let first = true;
+            for (let x = xMin; x <= xMax; x += 0.02) {
+                let y = evaluateMath(exprString, x);
+                if (!isNaN(y) && isFinite(y)) {
+                    if (first) {
+                        ctx.moveTo(cx(x), cy(y));
+                        first = false;
+                    } else {
+                        ctx.lineTo(cx(x), cy(y));
+                    }
+                }
+            }
+            ctx.stroke();
+
+            // 5. Draw integration dynamic slice bounds flags (vertical brackets)
+            ctx.strokeStyle = '#495057';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            
+            ctx.beginPath(); ctx.moveTo(cx(a), 0); ctx.lineTo(cx(a), h); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx(b), 0); ctx.lineTo(cx(b), h); ctx.stroke();
+            ctx.setLineDash([]); // clear dash adjustments
+
+            // Calculate precise value and push text strings out
+            let result = integrate(exprString, a, b);
+            resultDisplay.textContent = `∫ f(x) dx = ${result.toFixed(4)}`;
+
+        } catch (err) {
+            errorMsg.style.display = 'block';
+            resultDisplay.textContent = "∫ f(x) dx = ———";
+        }
+
+        ctx.restore();
+    }
+
+    // Update dynamic text readouts on sliders real-time
+    function updateSliders() {
+        valA.textContent = sliderA.value;
+        valB.textContent = sliderB.value;
+        draw();
+    }
+
+    // Window Events & Interactive listeners
+    window.addEventListener('resize', resizeCanvas);
+    eqInput.addEventListener('input', draw);
+    sliderA.addEventListener('input', updateSliders);
+    sliderB.addEventListener('input', updateSliders);
+
+    // Run layout initializer execution explicitly
+    resizeCanvas();
+</script>
+
+</body>
+</html>
